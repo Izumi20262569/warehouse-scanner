@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Warehouse Location Scanner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --ink:#1C1C1E;
+    --paper:#FAF9F6;
+    --amber:#FFB020;
+    --amber-dark:#8A5A0A;
+    --steel:#6B7280;
+    --steel-light:#E7E5E0;
+    --good:#1D9E75;
+    --good-bg:#E1F5EE;
+    --bad:#D85A30;
+    --bad-bg:#FAECE7;
+    --mono: 'Courier New', ui-monospace, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; padding-bottom:60px;
+  }
+  .tape{
+    background: repeating-linear-gradient(135deg, var(--ink), var(--ink) 14px, var(--amber) 14px, var(--amber) 28px);
+    height:8px; width:100%;
+  }
+  header{
+    padding:18px 16px 14px; background:var(--ink); color:var(--paper);
+  }
+  header .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--amber);
+    text-transform:uppercase; margin:0 0 4px;
+  }
+  header h1{
+    margin:0; font-size:20px; font-weight:700; letter-spacing:-0.3px;
+  }
+  header p{
+    margin:6px 0 0; font-size:13px; color:#B9B7B0;
+  }
+  .wrap{ padding:16px; max-width:520px; margin:0 auto; }
+
+  .panel{
+    background:#fff; border:1px solid var(--steel-light); border-radius:10px;
+    padding:16px; margin-bottom:14px;
+  }
+  .panel-label{
+    font-family:var(--mono); font-size:11px; letter-spacing:1.5px; text-transform:uppercase;
+    color:var(--steel); margin:0 0 10px; display:flex; align-items:center; gap:6px;
+  }
+  .panel-label .n{
+    background:var(--ink); color:var(--amber); width:18px; height:18px; border-radius:3px;
+    display:inline-flex; align-items:center; justify-content:center; font-size:10px;
+  }
+
+  #reader{ width:100%; border-radius:8px; overflow:hidden; }
+  #reader video{ border-radius:8px; }
+
+  .scan-btn{
+    width:100%; padding:14px; font-size:15px; font-weight:700; font-family:var(--sans);
+    background:var(--amber); color:var(--ink); border:none; border-radius:8px;
+    cursor:pointer; letter-spacing:0.2px;
+  }
+  .scan-btn:active{ transform:scale(0.99); }
+  .scan-btn.stop{ background:var(--ink); color:var(--amber); }
+
+  label{
+    display:block; font-family:var(--mono); font-size:11px; letter-spacing:1px;
+    text-transform:uppercase; color:var(--steel); margin:12px 0 5px;
+  }
+  label:first-of-type{ margin-top:0; }
+  input, select{
+    width:100%; padding:11px 12px; font-size:15px; font-family:var(--sans);
+    border:1.5px solid var(--steel-light); border-radius:7px; background:var(--paper);
+    color:var(--ink);
+  }
+  input:focus, select:focus{ outline:none; border-color:var(--ink); }
+  input.scanned{ border-color:var(--good); background:var(--good-bg); font-family:var(--mono); font-weight:700; }
+
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  .submit-btn{
+    width:100%; padding:14px; margin-top:14px; font-size:15px; font-weight:700;
+    background:var(--ink); color:#fff; border:none; border-radius:8px; cursor:pointer;
+  }
+  .submit-btn:disabled{ opacity:0.5; }
+  .submit-btn:active{ transform:scale(0.99); }
+
+  .status{ font-size:13px; margin-top:10px; padding:9px 11px; border-radius:6px; display:none; }
+  .status.show{ display:block; }
+  .status.ok{ background:var(--good-bg); color:#085041; }
+  .status.err{ background:var(--bad-bg); color:#4A1B0C; }
+
+  .cfg-toggle{
+    font-family:var(--mono); font-size:11px; color:var(--steel); text-decoration:underline;
+    cursor:pointer; background:none; border:none; padding:0; margin-bottom:8px;
+  }
+
+  .log-title{
+    font-family:var(--mono); font-size:11px; letter-spacing:1.5px; text-transform:uppercase;
+    color:var(--steel); margin:22px 0 8px;
+  }
+  .log-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 12px; background:#fff; border:1px solid var(--steel-light);
+    border-radius:7px; margin-bottom:7px; font-size:13px;
+  }
+  .log-item .loc{ font-family:var(--mono); font-weight:700; background:var(--ink); color:var(--amber); padding:2px 7px; border-radius:4px; font-size:12px; }
+  .log-item .meta{ color:var(--steel); font-size:12px; }
+  .log-item.pending .loc{ background:var(--steel); }
+  .log-empty{ color:var(--steel); font-size:13px; text-align:center; padding:16px 0; }
+</style>
+</head>
+<body>
+
+<div class="tape"></div>
+<header>
+  <p class="eyebrow">Warehouse / Location scan</p>
+  <h1>บันทึกตำแหน่งจัดเก็บสินค้า</h1>
+  <p>สแกนบาร์โค้ด/QR ด้วยกล้องมือถือ ข้อมูลจะถูกส่งเข้า Google Sheet โดยตรง</p>
+</header>
+
+<div class="wrap">
+
+  <div class="panel">
+    <button class="cfg-toggle" id="cfgToggle" type="button">ตั้งค่าปลายทาง (Google Sheet URL) ▾</button>
+    <div id="cfgBox" style="display:none;">
+      <label for="webhookUrl">Google Apps Script Web App URL</label>
+      <input type="url" id="webhookUrl" placeholder="https://script.google.com/macros/s/xxxx/exec">
+      <p style="font-size:12px; color:var(--steel); margin:6px 0 0;">
+        วางลิงก์ที่ได้จากขั้นตอน Deploy ของ Apps Script (ดูวิธีทำในแชท) — ต้องวางใหม่ทุกครั้งที่เปิดหน้านี้ เพราะแอปนี้ไม่เก็บข้อมูลถาวรในเครื่อง
+      </p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-label"><span class="n">1</span>สแกนตำแหน่ง / รหัสสินค้า</p>
+    <div id="reader" style="display:none;"></div>
+    <button class="scan-btn" id="scanBtn" type="button">เปิดกล้องสแกน</button>
+  </div>
+
+  <div class="panel">
+    <p class="panel-label"><span class="n">2</span>รายละเอียดการจัดเก็บ</p>
+
+    <label for="locationCode">รหัสตำแหน่ง (Location code)</label>
+    <input type="text" id="locationCode" placeholder="เช่น A-03-02 หรือสแกนจาก step 1">
+
+    <label for="skuCode">รหัสสินค้า / SKU</label>
+    <input type="text" id="skuCode" placeholder="เช่น VISOR-CLR-001">
+
+    <div class="row2">
+      <div>
+        <label for="qty">จำนวน</label>
+        <input type="number" id="qty" placeholder="0" min="0">
+      </div>
+      <div>
+        <label for="action">ประเภท</label>
+        <select id="action">
+          <option value="รับเข้า">รับเข้า</option>
+          <option value="ย้ายตำแหน่ง">ย้ายตำแหน่ง</option>
+          <option value="เบิกออก">เบิกออก</option>
+          <option value="นับสต๊อก">นับสต๊อก</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="toLocationWrap" style="display:none;">
+      <label for="toLocation">ย้ายไปตำแหน่งปลายทาง</label>
+      <input type="text" id="toLocation" placeholder="เช่น B-01-04">
+    </div>
+
+    <label for="note">หมายเหตุ (ไม่บังคับ)</label>
+    <input type="text" id="note" placeholder="เช่น ล็อตผลิต, ชื่อผู้บันทึก">
+
+    <button class="submit-btn" id="submitBtn" type="button">บันทึกเข้า Google Sheet</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <p class="log-title">รายการล่าสุด (เซสชันนี้)</p>
+  <div id="log"><p class="log-empty">ยังไม่มีรายการที่บันทึก</p></div>
+
+</div>
+
+<script>
+let html5QrCode = null;
+let scanning = false;
+let sessionLog = [];
+
+document.getElementById('action').addEventListener('change', function(){
+  document.getElementById('toLocationWrap').style.display = (this.value === 'ย้ายตำแหน่ง') ? 'block' : 'none';
+});
+
+document.getElementById('cfgToggle').addEventListener('click', function(){
+  const box = document.getElementById('cfgBox');
+  const open = box.style.display !== 'none';
+  box.style.display = open ? 'none' : 'block';
+  this.textContent = open ? 'ตั้งค่าปลายทาง (Google Sheet URL) ▾' : 'ตั้งค่าปลายทาง (Google Sheet URL) ▴';
+});
+
+function onScanSuccess(decodedText){
+  const locField = document.getElementById('locationCode');
+  if(!locField.value){
+    locField.value = decodedText;
+    locField.classList.add('scanned');
+  } else {
+    document.getElementById('skuCode').value = decodedText;
+  }
+  if(navigator.vibrate) navigator.vibrate(80);
+  stopScan();
+}
+
+function startScan(){
+  const readerDiv = document.getElementById('reader');
+  const btn = document.getElementById('scanBtn');
+  readerDiv.style.display = 'block';
+  html5QrCode = new Html5Qrcode('reader');
+  html5QrCode.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 240, height: 140 } },
+    onScanSuccess
+  ).then(function(){
+    scanning = true;
+    btn.textContent = 'ปิดกล้อง';
+    btn.classList.add('stop');
+  }).catch(function(err){
+    readerDiv.style.display = 'none';
+    showStatus('เปิดกล้องไม่ได้ ตรวจสอบสิทธิ์การเข้าถึงกล้องของเบราว์เซอร์ (' + err + ')', false);
+  });
+}
+
+function stopScan(){
+  const btn = document.getElementById('scanBtn');
+  if(html5QrCode && scanning){
+    html5QrCode.stop().then(function(){
+      html5QrCode.clear();
+      document.getElementById('reader').style.display = 'none';
+      scanning = false;
+      btn.textContent = 'เปิดกล้องสแกน';
+      btn.classList.remove('stop');
+    }).catch(function(){});
+  }
+}
+
+document.getElementById('scanBtn').addEventListener('click', function(){
+  if(scanning){ stopScan(); } else { startScan(); }
+});
+
+function showStatus(msg, ok){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status show ' + (ok ? 'ok' : 'err');
+}
+
+function renderLog(){
+  const logDiv = document.getElementById('log');
+  if(sessionLog.length === 0){
+    logDiv.innerHTML = '<p class="log-empty">ยังไม่มีรายการที่บันทึก</p>';
+    return;
+  }
+  logDiv.innerHTML = sessionLog.slice().reverse().map(function(item){
+    var locHtml = '<span class="loc">' + escapeHtml(item.location) + '</span>';
+    if(item.toLocation){ locHtml += ' &rarr; <span class="loc">' + escapeHtml(item.toLocation) + '</span>'; }
+    return '<div class="log-item ' + (item.pending ? 'pending' : '') + '">' +
+      '<div>' + locHtml + ' &nbsp;' +
+      escapeHtml(item.sku) + ' &times; ' + escapeHtml(String(item.qty)) + '</div>' +
+      '<span class="meta">' + (item.pending ? 'กำลังส่ง…' : item.time) + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+document.getElementById('submitBtn').addEventListener('click', function(){
+  const url = document.getElementById('webhookUrl').value.trim();
+  const location = document.getElementById('locationCode').value.trim();
+  const sku = document.getElementById('skuCode').value.trim();
+  const qty = document.getElementById('qty').value;
+  const action = document.getElementById('action').value;
+  const note = document.getElementById('note').value.trim();
+  const toLocation = document.getElementById('toLocation').value.trim();
+
+  if(!url){ showStatus('กรุณาใส่ Google Sheet URL ในส่วนตั้งค่าก่อน', false); return; }
+  if(!location){ showStatus('กรุณาระบุรหัสตำแหน่ง', false); return; }
+  if(!sku){ showStatus('กรุณาระบุรหัสสินค้า', false); return; }
+  if(action === 'ย้ายตำแหน่ง' && !toLocation){ showStatus('กรุณาระบุตำแหน่งปลายทางที่จะย้ายไป', false); return; }
+
+  const payload = {
+    location: location,
+    sku: sku,
+    qty: qty || '0',
+    action: action,
+    note: note,
+    toLocation: toLocation,
+    timestamp: new Date().toISOString()
+  };
+
+  const entry = { location: location, sku: sku, qty: qty || '0', toLocation: (action === 'ย้ายตำแหน่ง' ? toLocation : ''), pending: true, time: '' };
+  sessionLog.push(entry);
+  renderLog();
+
+  fetch(url, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(payload)
+  }).then(function(){
+    entry.pending = false;
+    entry.time = new Date().toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+    renderLog();
+    showStatus('บันทึก ' + location + ' / ' + sku + ' เรียบร้อย', true);
+    document.getElementById('locationCode').value = '';
+    document.getElementById('locationCode').classList.remove('scanned');
+    document.getElementById('skuCode').value = '';
+    document.getElementById('qty').value = '';
+    document.getElementById('note').value = '';
+    document.getElementById('toLocation').value = '';
+  }).catch(function(err){
+    entry.pending = false;
+    entry.time = 'ส่งไม่สำเร็จ';
+    renderLog();
+    showStatus('ส่งข้อมูลไม่สำเร็จ ตรวจสอบ URL และการเชื่อมต่ออินเทอร์เน็ต', false);
+  });
+});
+</script>
+
+</body>
+</html>
