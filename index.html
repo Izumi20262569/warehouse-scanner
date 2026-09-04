@@ -68,6 +68,15 @@
   .scan-btn:active{ transform:scale(0.99); }
   .scan-btn.stop{ background:var(--ink); color:var(--amber); }
 
+  .field-with-scan{ display:flex; gap:8px; align-items:stretch; }
+  .field-with-scan input{ flex:1; min-width:0; }
+  .scan-icon-btn{
+    flex-shrink:0; width:48px; font-size:20px; background:var(--amber);
+    border:none; border-radius:7px; cursor:pointer; line-height:1;
+  }
+  .scan-icon-btn:active{ transform:scale(0.96); }
+  .scan-icon-btn.active{ background:var(--ink); color:var(--amber); }
+
   label{
     display:block; font-family:var(--mono); font-size:11px; letter-spacing:1px;
     text-transform:uppercase; color:var(--steel); margin:12px 0 5px;
@@ -155,19 +164,22 @@
   </div>
 
   <div class="panel">
-    <p class="panel-label"><span class="n">1</span>สแกนตำแหน่ง / รหัสสินค้า</p>
-    <div id="reader" style="display:none;"></div>
-    <button class="scan-btn" id="scanBtn" type="button">เปิดกล้องสแกน</button>
-  </div>
+    <p class="panel-label"><span class="n">1</span>รายละเอียดการจัดเก็บ</p>
 
-  <div class="panel">
-    <p class="panel-label"><span class="n">2</span>รายละเอียดการจัดเก็บ</p>
+    <div id="reader" style="display:none;"></div>
+    <p id="scanHint" style="display:none; font-size:13px; font-weight:700; color:var(--amber-dark); margin:0 0 10px; text-align:center;"></p>
 
     <label for="locationCode">รหัสตำแหน่ง (Location code)</label>
-    <input type="text" id="locationCode" placeholder="เช่น A-03-02 หรือสแกนจาก step 1">
+    <div class="field-with-scan">
+      <input type="text" id="locationCode" placeholder="เช่น A-03-02 หรือกดกล้องด้านขวา">
+      <button class="scan-icon-btn" id="scanLocationBtn" type="button" title="สแกนรหัสตำแหน่ง">📷</button>
+    </div>
 
     <label for="skuCode">รหัสสินค้า / SKU</label>
-    <input type="text" id="skuCode" placeholder="เช่น VISOR-CLR-001">
+    <div class="field-with-scan">
+      <input type="text" id="skuCode" placeholder="เช่น VISOR-CLR-001">
+      <button class="scan-icon-btn" id="scanSkuBtn" type="button" title="สแกนรหัสสินค้า">📷</button>
+    </div>
 
     <div id="stockLookupWrap" style="display:none;">
       <button class="lookup-btn" id="lookupBtn" type="button">🔍 เช็คว่าสินค้านี้อยู่ตำแหน่งไหนบ้าง</button>
@@ -277,22 +289,28 @@ document.getElementById('cfgToggle').addEventListener('click', function(){
   this.textContent = open ? 'ตั้งค่าปลายทาง (Google Sheet URL) ▾' : 'ตั้งค่าปลายทาง (Google Sheet URL) ▴';
 });
 
+let scanTarget = null;
+
 function onScanSuccess(decodedText){
-  const locField = document.getElementById('locationCode');
-  if(!locField.value){
+  if(scanTarget === 'sku'){
+    document.getElementById('skuCode').value = decodedText;
+  } else {
+    const locField = document.getElementById('locationCode');
     locField.value = decodedText;
     locField.classList.add('scanned');
-  } else {
-    document.getElementById('skuCode').value = decodedText;
   }
   if(navigator.vibrate) navigator.vibrate(80);
   stopScan();
 }
 
-function startScan(){
+function startScan(target){
+  scanTarget = target;
   const readerDiv = document.getElementById('reader');
-  const btn = document.getElementById('scanBtn');
+  const hint = document.getElementById('scanHint');
   readerDiv.style.display = 'block';
+  hint.style.display = 'block';
+  hint.textContent = target === 'sku' ? '📷 กำลังสแกน: รหัสสินค้า' : '📷 กำลังสแกน: รหัสตำแหน่ง';
+  setActiveScanBtn(target);
   html5QrCode = new Html5Qrcode('reader');
   html5QrCode.start(
     { facingMode: 'environment' },
@@ -300,29 +318,37 @@ function startScan(){
     onScanSuccess
   ).then(function(){
     scanning = true;
-    btn.textContent = 'ปิดกล้อง';
-    btn.classList.add('stop');
   }).catch(function(err){
     readerDiv.style.display = 'none';
+    hint.style.display = 'none';
+    setActiveScanBtn(null);
     showStatus('เปิดกล้องไม่ได้ ตรวจสอบสิทธิ์การเข้าถึงกล้องของเบราว์เซอร์ (' + err + ')', false);
   });
 }
 
 function stopScan(){
-  const btn = document.getElementById('scanBtn');
   if(html5QrCode && scanning){
     html5QrCode.stop().then(function(){
       html5QrCode.clear();
       document.getElementById('reader').style.display = 'none';
+      document.getElementById('scanHint').style.display = 'none';
       scanning = false;
-      btn.textContent = 'เปิดกล้องสแกน';
-      btn.classList.remove('stop');
+      setActiveScanBtn(null);
+      scanTarget = null;
     }).catch(function(){});
   }
 }
 
-document.getElementById('scanBtn').addEventListener('click', function(){
-  if(scanning){ stopScan(); } else { startScan(); }
+function setActiveScanBtn(target){
+  document.getElementById('scanLocationBtn').classList.toggle('active', target === 'location');
+  document.getElementById('scanSkuBtn').classList.toggle('active', target === 'sku');
+}
+
+document.getElementById('scanLocationBtn').addEventListener('click', function(){
+  if(scanning && scanTarget === 'location'){ stopScan(); } else { startScan('location'); }
+});
+document.getElementById('scanSkuBtn').addEventListener('click', function(){
+  if(scanning && scanTarget === 'sku'){ stopScan(); } else { startScan('sku'); }
 });
 
 function showStatus(msg, ok){
